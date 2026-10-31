@@ -1,5 +1,5 @@
 {
-  "name": "cheese-hello-frontend",
+  "name": "cheese-shop-frontend",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -11,6 +11,8 @@
     "check": "eslint . && prettier --check . && vite build"
   },
   "dependencies": {
+    "@fontsource/baloo-2": "5.3.0",
+    "@fontsource/nunito": "5.3.0",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },

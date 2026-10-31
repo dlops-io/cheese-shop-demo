@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 // The browser always calls /api/... on its own origin. In dev, Vite forwards that to the API
-// container by name, on cheese-hello-network; in production, nginx does (nginx.conf).
+// container by name, on cheese-shop-demo-network; in production, nginx does (nginx.conf).
 export default defineConfig({
   plugins: [react()],
   server: {
