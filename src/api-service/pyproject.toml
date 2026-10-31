@@ -1,7 +1,7 @@
 [project]
-name = "cheese-hello-api"
+name = "cheese-shop-api"
 version = "0.1.0"
-description = "Cheese Hello API: the smallest service that shows which pod answered you"
+description = "Cheese Shop API: order cheeses, and workers age them one at a time"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.141.1",
@@ -23,7 +23,7 @@ package = false
 testpaths = ["tests"]
 pythonpath = ["."]
 # Keep pytest's cache off the bind mount in container development.
-cache_dir = "${HOME}/.cache/cheese-hello-api/pytest"
+cache_dir = "${HOME}/.cache/cheese-shop-api/pytest"
 
 [tool.ruff]
 line-length = 110

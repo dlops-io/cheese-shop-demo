@@ -1,67 +1,75 @@
-"""Cheese Hello API: the smallest service that shows which pod answered you.
+"""Cheese Shop API: order cheeses, and workers age them one at a time.
 
-    GET /api/cheese   a random cheese, and the pod that served it
-    GET /api/work     burn some CPU, so we can watch the autoscaler react
-    GET /api/docs     FastAPI's interactive docs
-    GET /healthz      liveness: the process is up
-    GET /readyz       readiness: past the warm-up
+    POST /api/orders       order some cheeses
+    GET  /api/orders       every ticket in the shop (the page polls this)
+    GET  /api/orders/{id}  one ticket
+    GET  /api/docs         FastAPI's interactive docs
 
-App routes live under /api because the dev proxy and nginx forward the full path, so the API serves
-exactly the paths the browser asks for. The probes stay at the root, where the kubelet asks for them.
+Routes live under /api because the dev proxy and nginx forward the full path.
+The shop lives in this process's memory, so restarting the API empties it.
 """
 
-import itertools
-import os
+import asyncio
 import random
-import socket
-import time
+from contextlib import asynccontextmanager
 
-from fastapi import APIRouter, FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
 
-POD = socket.gethostname()  # the container id in Docker, the pod name in Kubernetes
-VERSION = os.getenv("VERSION", "v1")  # changing it is enough to trigger a rolling update
-WARMUP_S = float(os.getenv("WARMUP_S", "2"))  # how long a new pod stays "not ready"
+WORKERS = 2
+AGE_S = 1.5
+CHEESES = ["Baby brie", "Blue stilton", "Golden comté", "Nutty gruyère", "Sharp cheddar", "Smoky gouda"]
 
-STARTED_AT = time.monotonic()
-CHEESES = ["Brie", "Camembert", "Cheddar", "Comté", "Gorgonzola", "Gouda", "Gruyère", "Manchego", "Parmesan"]
-
-# Kept in this process's memory on purpose: every pod counts on its own, and a restart starts from
-# zero. That is why an app that scales keeps its real state outside the pod.
-served = itertools.count(1)
-
-router = APIRouter(prefix="/api")
+tickets = {}  # id -> ticket
+queue = asyncio.Queue()  # tickets waiting for a worker
 
 
-def answer() -> dict:
-    return {"pod": POD, "version": VERSION, "served": next(served)}
+async def worker(name):
+    while True:
+        ticket = await queue.get()  # wait here until a ticket arrives
+        ticket.update(state="aging", worker=name)
+        await asyncio.sleep(AGE_S)  # `await` lets the API keep answering while this cheese ages
+        ticket["state"] = "ready"
 
 
-@router.get("/cheese")
-def cheese():
-    return {"cheese": random.choice(CHEESES), **answer()}
+@asynccontextmanager
+async def lifespan(app):
+    workers = [asyncio.create_task(worker(f"worker-{n + 1}")) for n in range(WORKERS)]
+    yield
+    for task in workers:
+        task.cancel()
 
 
-@router.get("/work")
-def work(ms: int = Query(100, ge=1, le=1000)):
-    # A plain `def`, so FastAPI runs this blocking loop in a thread and the probes keep answering.
-    # It burns a fixed amount of CPU time: when the pod has too little CPU, requests simply take longer.
-    end = time.thread_time() + ms / 1000
-    while time.thread_time() < end:
-        sum(range(1000))
-    return answer()
+app = FastAPI(
+    title="Cheese Shop API", lifespan=lifespan, docs_url="/api/docs", openapi_url="/api/openapi.json"
+)
 
 
-app = FastAPI(title="Cheese Hello API", docs_url="/api/docs", openapi_url="/api/openapi.json")
-app.include_router(router)
+class Order(BaseModel):
+    count: int = Field(ge=1, le=50)  # anything else is answered with 422
 
 
-@app.get("/healthz")
-def healthz():
-    return {"ok": True}
+@app.post("/api/orders", status_code=201)
+async def place_order(order: Order):
+    new_tickets = []
+    for _ in range(order.count):
+        ticket = {"id": len(tickets) + 1, "name": random.choice(CHEESES), "state": "queued", "worker": None}
+        tickets[ticket["id"]] = ticket
+        queue.put_nowait(ticket)
+        new_tickets.append(ticket)
+    return new_tickets
 
 
-@app.get("/readyz")
-def readyz():
-    if time.monotonic() - STARTED_AT < WARMUP_S:
-        raise HTTPException(503, "warming up")
-    return {"ok": True}
+@app.get("/api/orders")
+async def list_orders():
+    shop = {"workers": WORKERS, "age_s": AGE_S, "queued": [], "aging": [], "ready": []}
+    for ticket in tickets.values():
+        shop[ticket["state"]].append(ticket)
+    return shop
+
+
+@app.get("/api/orders/{ticket_id}")
+async def get_order(ticket_id: int):
+    if ticket_id not in tickets:
+        raise HTTPException(404, "No such ticket")
+    return tickets[ticket_id]
