@@ -1,8 +1,20 @@
 const WORKER_COLORS = ['#7fc9b7', '#f0a23f', '#c9a6f0', '#6fb3f2', '#f08a8a', '#b8d86a']
 
-// worker-1 gets the first colour, worker-2 the second, and so on
-const workerColor = (worker) =>
-  WORKER_COLORS[(parseInt(worker.slice(7)) - 1) % WORKER_COLORS.length]
+// Workers take colours in the order they took their first ticket, so each keeps its colour as more
+// join, even after a reload
+function workerColors(tickets) {
+  const oldestFirst = [...tickets].sort((a, b) => a.id - b.id)
+  const workers = [...new Set(oldestFirst.map((ticket) => ticket.worker))]
+  return Object.fromEntries(
+    workers.map((worker, i) => [worker, WORKER_COLORS[i % WORKER_COLORS.length]]),
+  )
+}
+
+// A pod's name is long: worker-6f7d9c8b5-x2k4p reads as worker-x2k4p. worker-1 stays as it is.
+function shortName(worker) {
+  const parts = worker.split('-')
+  return `${parts[0]}-${parts.at(-1)}`
+}
 
 export function CheeseIcon({ size = 22 }) {
   return (
@@ -15,14 +27,16 @@ export function CheeseIcon({ size = 22 }) {
   )
 }
 
-function Ticket({ ticket, ageS }) {
-  const color = ticket.worker ? workerColor(ticket.worker) : undefined
+function Ticket({ ticket, ageS, colors }) {
   return (
-    <li className={`ticket ${ticket.state}`} style={{ '--worker': color, '--age': `${ageS}s` }}>
+    <li
+      className={`ticket ${ticket.state}`}
+      style={{ '--worker': colors[ticket.worker], '--age': `${ageS}s` }}
+    >
       {ticket.state === 'ready' ? <i className="swatch" /> : <CheeseIcon />}
       <code>#{ticket.id}</code>
       <span className="name">{ticket.name}</span>
-      <code className="worker">{ticket.worker ?? 'waiting'}</code>
+      <code className="worker">{ticket.worker ? shortName(ticket.worker) : 'waiting'}</code>
       {ticket.state === 'aging' && (
         <div className="progress">
           <div />
@@ -32,7 +46,7 @@ function Ticket({ ticket, ageS }) {
   )
 }
 
-function Column({ title, total, tickets, ageS, empty, more }) {
+function Column({ title, total, tickets, ageS, colors, empty, more }) {
   return (
     <div className="column">
       <h2>
@@ -41,7 +55,7 @@ function Column({ title, total, tickets, ageS, empty, more }) {
       {total === 0 && <p className="muted">{empty}</p>}
       <ul>
         {tickets.map((ticket) => (
-          <Ticket key={ticket.id} ticket={ticket} ageS={ageS} />
+          <Ticket key={ticket.id} ticket={ticket} ageS={ageS} colors={colors} />
         ))}
       </ul>
       {more > 0 && <p className="muted">+ {more} more in line</p>}
@@ -51,12 +65,14 @@ function Column({ title, total, tickets, ageS, empty, more }) {
 
 export default function Board({ shop }) {
   const { queued, aging, ready, age_s: ageS } = shop
+  const colors = workerColors([...aging, ...ready])
   return (
     <section className="board">
       <Column
         title="Queued"
         total={queued.length}
         tickets={queued.slice(0, 6)}
+        colors={colors}
         more={queued.length - 6}
         empty="Nothing waiting. Place an order."
       />
@@ -65,12 +81,14 @@ export default function Board({ shop }) {
         total={aging.length}
         tickets={aging}
         ageS={ageS}
+        colors={colors}
         empty="Workers are idle."
       />
       <Column
         title="Ready"
         total={ready.length}
         tickets={ready.slice(-8).reverse()}
+        colors={colors}
         empty="Nothing ready yet."
       />
     </section>

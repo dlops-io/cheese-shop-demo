@@ -36,7 +36,7 @@ export default function App() {
           <h1>Cheese Shop</h1>
         </div>
         <span className="pill">
-          <i /> {shop.workers} workers aging
+          <i /> {shop.workers} {shop.workers === 1 ? 'worker' : 'workers'} aging
         </span>
       </header>
 
@@ -53,9 +53,7 @@ export default function App() {
 
       <Board shop={shop} />
 
-      <p className="note">
-        {shop.workers} workers inside the API age each cheese for {shop.age_s} s.
-      </p>
+      <p className="note">Workers age each cheese for {shop.age_s} s.</p>
 
       <HowItWorks />
     </main>

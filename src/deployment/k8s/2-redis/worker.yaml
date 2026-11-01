@@ -1,0 +1,28 @@
+# The workers, out of the API and into their own pods: the same image, running api/worker.py.
+# There is no Service, because nothing calls a worker. Workers go to Redis and take tickets.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  labels: { app: worker }
+spec:
+  # No `replicas`: it starts at 1, and `kubectl scale` or an autoscaler owns it from there
+  selector:
+    matchLabels: { app: worker }
+  template:
+    metadata:
+      labels: { app: worker }
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 15 # time to finish the cheese in hand after SIGTERM
+      containers:
+        - name: worker
+          image: cheese-shop-demo-api-service:v1
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "api.worker"]
+          resources:
+            requests: { cpu: 100m, memory: 64Mi } # an autoscaler's percentages are of this request
+            limits: { cpu: 500m, memory: 128Mi } # half a CPU: 0.75 s of CPU takes about 1.5 s
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
