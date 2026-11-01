@@ -19,6 +19,8 @@ The following commands are available:
         Add KEDA, which scales on queue length
     ./scripts/deploy.sh
         Build the images, load them into the cluster and apply k8s/1-in-memory: http://localhost:8080
+    ./scripts/order.sh 500
+        Order any number of cheeses
     ./scripts/delete-cluster.sh
         Delete the cluster
 \033[0m

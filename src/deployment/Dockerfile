@@ -9,7 +9,7 @@ ARG KUBECTL_VERSION=v1.37.1
 
 RUN case "${TARGETARCH}" in amd64|arm64) ;; *) echo "Unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; esac
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends bash-completion ca-certificates curl gnupg \
+    && apt-get install -y --no-install-recommends bash-completion ca-certificates curl gnupg procps \
     && install -m 0755 -d /etc/apt/keyrings \
     && curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc \
     && echo "deb [arch=${TARGETARCH} signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian trixie stable" > /etc/apt/sources.list.d/docker.list \

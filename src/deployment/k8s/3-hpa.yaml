@@ -1,0 +1,24 @@
+# Step 3: more CPU, more workers. `kubectl apply -f k8s/3-hpa.yaml`
+# The HPA reads each worker's CPU from metrics-server and aims for 60% of its 100m request.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: worker
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: worker
+  minReplicas: 1
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: 60 }
+  # Short enough to watch in class: scale up at once, scale down after a quiet minute
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+    scaleDown:
+      stabilizationWindowSeconds: 60

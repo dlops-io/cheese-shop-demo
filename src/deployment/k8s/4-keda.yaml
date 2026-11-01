@@ -1,0 +1,26 @@
+# Step 4: more tickets waiting, more workers. `kubectl apply -f k8s/4-keda.yaml`
+# KEDA reads the length of the Redis list and drives an HPA of its own, keda-hpa-worker, so remove
+# the HPA from step 3 first: a Deployment can only have one.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: worker
+spec:
+  scaleTargetRef:
+    name: worker
+  minReplicaCount: 0 # no tickets, no pods: something CPU can never do, since no pods means no reading
+  maxReplicaCount: 6
+  pollingInterval: 5 # read the queue every 5 s
+  cooldownPeriod: 30 # after the queue empties, wait this long before going to zero
+  # The same quiet-period setting as step 3, shorter because the queue is an exact signal
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 30
+  triggers:
+    - type: redis
+      metadata:
+        address: redis.cheese-shop.svc.cluster.local:6379 # the full name: KEDA runs in its own namespace
+        listName: queue
+        listLength: "5" # one worker for every 5 tickets waiting
