@@ -1,0 +1,7 @@
+# Step 1: the app from Part 1, unchanged. `kubectl apply -k k8s/1-in-memory`
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: cheese-shop
+resources:
+  - api-service.yaml
+  - frontend-react.yaml

@@ -1,0 +1,47 @@
+# The API from Part 1, unchanged. A Deployment keeps its pods running; a Service gives them one
+# stable name. The shop lives in each pod's memory, which is what the first step of the tutorial shows.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-service
+  labels: { app: api-service }
+spec:
+  # No `replicas`: it starts at 1, and `kubectl scale` owns it from there. Writing it here would knock
+  # a scaled-out Deployment back down on every `kubectl apply`.
+  selector:
+    matchLabels: { app: api-service } # the glue: this Deployment's pods, and the Service below
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } # a new pod is ready before an old one leaves
+  template:
+    metadata:
+      labels: { app: api-service }
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: api-service
+          image: cheese-shop-demo-api-service:v1
+          imagePullPolicy: IfNotPresent # loaded by `kind load`; there is no registry to pull from
+          ports: [{ name: http, containerPort: 9000 }]
+          resources:
+            requests: { cpu: 100m, memory: 64Mi } # what the scheduler reserves
+            limits: { cpu: 500m, memory: 128Mi } # the most it may use
+          readinessProbe: # no traffic until the shop answers
+            httpGet: { path: /api/orders, port: http }
+            periodSeconds: 2
+          lifecycle:
+            # A pod leaves the Service and gets its shutdown signal at the same moment, so keep serving
+            # for a few seconds. Without this, a rolling update drops requests.
+            preStop:
+              sleep: { seconds: 5 }
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-service # the name nginx calls: http://api-service:9000
+spec:
+  selector: { app: api-service }
+  ports: [{ name: http, port: 9000, targetPort: http }]

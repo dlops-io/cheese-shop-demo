@@ -17,6 +17,8 @@ The following commands are available:
         Create the local cluster: 1 control plane and 2 workers, with metrics-server
     ./scripts/install-keda.sh
         Add KEDA, which scales on queue length
+    ./scripts/deploy.sh
+        Build the images, load them into the cluster and apply k8s/1-in-memory: http://localhost:8080
     ./scripts/delete-cluster.sh
         Delete the cluster
 \033[0m
