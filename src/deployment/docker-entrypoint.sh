@@ -21,6 +21,8 @@ The following commands are available:
         Build the images, load them into the cluster and apply k8s/1-in-memory: http://localhost:8080
     ./scripts/order.sh 500
         Order any number of cheeses
+    ./scripts/verify.sh
+        Rehearse all of Part 2 on a new cluster, about 20 minutes (it deletes the one you have)
     ./scripts/delete-cluster.sh
         Delete the cluster
 \033[0m

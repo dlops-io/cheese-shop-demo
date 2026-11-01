@@ -119,7 +119,7 @@ Stop it with Ctrl-C before Part 2, which needs port 8080.
 
 `kind` runs Kubernetes in Docker: each node of the cluster is a container on your laptop. With
 everything running it uses about 2 GB of memory. Six workers at full speed want 3 CPUs: with fewer,
-cheeses just take longer. The times below are from one run on a 12-core laptop, so expect yours to
+cheeses just take longer. The times below are from a few runs on a 12-core laptop, so expect yours to
 differ.
 
 | Step | What you run | What you learn |
@@ -276,7 +276,7 @@ the page open too, and start with a small order:
 ./scripts/order.sh 5
 ```
 
-Watch the board and the pods. The five cheeses finish in about 9 seconds, and **then** the HPA adds
+Watch the board and the pods. The five cheeses finish in about 8 seconds, and **then** the HPA adds
 pods, for work that is already done. CPU is measured after the fact: in three runs, new pods arrived
 22 to 42 seconds after the order, and we got between 2 and 5 of them. The numbers change each time,
 but the order of events does not.
@@ -289,17 +289,19 @@ Wait for it to go back to one pod, about a minute after it goes quiet. Then orde
 
 | Time | Tickets waiting | Pods | CPU |
 | --- | --- | --- | --- |
-| 17 s | 489 | 1 | 1% |
-| 32 s | 450 | 5 | 295% |
-| 47 s | 393 | 6 | 500% |
-| 94 s | 207 | 6 | 500% |
-| 141 s | 21 | 6 | 500% |
-| 171 s | 0 | 6 | 499% |
-| 234 s | 0 | 1 | 1% |
+| 16 s | 489 | 1 | 1% |
+| 31 s | 471 | 5 | 418% |
+| 46 s | 419 | 6 | 500% |
+| 92 s | 239 | 6 | 500% |
+| 137 s | 59 | 6 | 500% |
+| 152 s | 0 | 6 | 500% |
+| 182 s | 0 | 6 | 131% |
+| 239 s | 0 | 1 | 1% |
 
 CPU reads 500% because each worker is at its limit of 500m, five times its request of 100m. It cannot
 go higher, so **a busy worker looks the same whether 5 or 500 tickets are waiting**. The queue fell
-from 393 to 21 and CPU did not move. It was still high 20 seconds after the queue had emptied.
+from 419 to 59 and CPU did not move. It stayed over its target for about 40 seconds after the queue
+had emptied.
 
 ### Step 4: Scale on the queue with KEDA
 
@@ -331,13 +333,17 @@ last cheese.
 
 | Tickets | CPU HPA | KEDA |
 | --- | --- | --- |
-| 5 | Done in about 9 s, then 2 to 5 pods arrive | 1 pod, done in about 12 to 15 s |
-| 20 | not measured | 4 pods, done in about 12 s |
-| 500 | 149 s, from 1 pod | 135 s, from 0 pods |
-| Afterwards | 1 pod, 234 s after the order | 0 pods, 162 s after the order |
+| 5 | Done in about 8 s, then 2 to 5 pods arrive | 1 pod, done in about 13 s |
+| 20 | Done in about 30 s, just as 5 or 6 pods arrive | Usually 4 pods, done in about 13 s |
+| 500, first new pod | About 30 s | About 5 s |
+| 500, every ticket done | About 154 s, from 1 pod | About 138 s, from 0 pods |
+| Afterwards | 1 pod, 240 to 270 s after the order | 0 pods, about 165 s after the order |
 
 KEDA is a little slower on the smallest order, because the first pod has to start from nothing. That
 is the price of scaling to zero.
+
+KEDA reads the queue every 5 seconds, but the HPA behind it decides every 15. In one run of four, that
+decision came late: only 10 tickets were left, so 20 tickets got 2 pods and took 29 seconds.
 
 ### Clean up
 
@@ -363,6 +369,7 @@ Leave the container with `exit`.
 
 | What you see | What to do |
 | --- | --- |
+| The worker jumps to 5 pods as soon as you apply the HPA | Its first reading still includes your last order. Wait for it to return to one pod |
 | `port is already allocated` when creating the cluster | Something is using port 8080. Stop it, such as the container from Part 1's step 5 |
 | `TARGETS` shows `<unknown>` | Wait up to a minute for the first reading |
 | `already managed by the hpa` when applying KEDA | Remove the HPA first: `kubectl delete -f k8s/3-hpa.yaml` |
@@ -371,6 +378,14 @@ Leave the container with `exit`.
 | Worker colours repeat | There are six colours, and every new pod takes the next one. Empty the shop with `kubectl delete pod -l app=redis` |
 
 ## Checks
+
+To rehearse Part 2 before class, run this inside the deployment shell. It **deletes the cluster**,
+builds a new one, runs all four steps, checks each result and prints the numbers. It takes about 20
+minutes, and the other commands should wait until it finishes:
+
+```bash
+./scripts/verify.sh
+```
 
 Inside the API container:
 
