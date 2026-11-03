@@ -6,7 +6,6 @@ cd "$(dirname -- "${BASH_SOURCE[0]}")/.."
 cluster=cheese-shop
 tag=v1
 redis_image=redis:8.10.3-alpine
-export KUBECONFIG="${KUBECONFIG:-/app/.local/kubeconfig}"
 
 for service in api-service frontend-react; do
     docker build -t "cheese-shop-demo-${service}:${tag}" "/${service}"

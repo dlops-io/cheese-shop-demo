@@ -2,9 +2,8 @@
 
 set -e
 
-# Define some environment variables
-export IMAGE_NAME="cheese-shop-demo-deployment"
-export BASE_DIR=$(pwd)
+IMAGE_NAME="cheese-shop-demo-deployment"
+BASE_DIR=$(pwd)
 
 # Check if container is already running
 if docker ps --format "table {{.Names}}" | grep -q "^${IMAGE_NAME}$"; then

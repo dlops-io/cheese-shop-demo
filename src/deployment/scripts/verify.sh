@@ -4,7 +4,6 @@
 #   ./scripts/verify.sh
 set -uo pipefail
 cd "$(dirname -- "${BASH_SOURCE[0]}")/.."
-export KUBECONFIG="${KUBECONFIG:-/app/.local/kubeconfig}"
 page=http://localhost:8080
 timeline=$(mktemp)
 results=$(mktemp)

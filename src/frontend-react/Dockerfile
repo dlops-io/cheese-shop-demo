@@ -1,6 +1,5 @@
 # Production image (development uses Dockerfile.dev).
-# The build stage runs on the builder's own platform (no emulation): its output is plain files.
-FROM --platform=$BUILDPLATFORM node:24.22.1-bookworm-slim AS build
+FROM node:24.22.1-bookworm-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci

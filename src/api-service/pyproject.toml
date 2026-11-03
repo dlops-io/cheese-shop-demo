@@ -14,7 +14,6 @@ dev = [
     "fakeredis>=2.40.0",
     "httpx2>=2.16.0",
     "pytest>=8.4.1",
-    "ruff>=0.12.0",
 ]
 
 # An application, not a library: install the dependencies only, never build a wheel of this project.
@@ -26,7 +25,3 @@ testpaths = ["tests"]
 pythonpath = ["."]
 # Keep pytest's cache off the bind mount in container development.
 cache_dir = "${HOME}/.cache/cheese-shop-api/pytest"
-
-[tool.ruff]
-line-length = 110
-target-version = "py313"

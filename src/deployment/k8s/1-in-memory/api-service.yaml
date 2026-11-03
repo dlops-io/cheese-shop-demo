@@ -4,15 +4,11 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: api-service
-  labels: { app: api-service }
 spec:
   # No `replicas`: it starts at 1, and `kubectl scale` owns it from there. Writing it here would knock
   # a scaled-out Deployment back down on every `kubectl apply`.
   selector:
     matchLabels: { app: api-service } # the glue: this Deployment's pods, and the Service below
-  strategy:
-    type: RollingUpdate
-    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } # a new pod is ready before an old one leaves
   template:
     metadata:
       labels: { app: api-service }
@@ -21,7 +17,6 @@ spec:
       containers:
         - name: api-service
           image: cheese-shop-demo-api-service:v1
-          imagePullPolicy: IfNotPresent # loaded by `kind load`; there is no registry to pull from
           ports: [{ name: http, containerPort: 9000 }]
           resources:
             requests: { cpu: 100m, memory: 64Mi } # what the scheduler reserves

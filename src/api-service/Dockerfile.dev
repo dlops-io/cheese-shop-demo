@@ -1,8 +1,6 @@
 FROM python:3.13-slim-bookworm
 
-ENV DEBIAN_FRONTEND=noninteractive \
-    LANG=C.UTF-8 \
-    PYTHONUNBUFFERED=1 \
+ENV PYTHONUNBUFFERED=1 \
     UV_PROJECT_ENVIRONMENT=/home/app/.venv \
     UV_LINK_MODE=copy \
     PATH="/home/app/.venv/bin:$PATH"

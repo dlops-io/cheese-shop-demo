@@ -38,16 +38,15 @@ def save(ticket):
 
 
 def age_one():
-    """Age one cheese, if a ticket arrives within a second. Returns whether one did."""
+    """Age one cheese, if a ticket arrives within a second."""
     item = db.blpop("queue", timeout=1)  # the timeout lets the loop below notice `stopping`
     if item is None:
-        return False
+        return
     ticket = json.loads(db.hget("tickets", item[1]))
     save(ticket | {"state": "aging", "worker": POD})
     burn_cpu(CPU_S)
     save(ticket | {"state": "ready", "worker": POD})
     print(f"Aged #{ticket['id']}")
-    return True
 
 
 def main():

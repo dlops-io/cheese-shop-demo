@@ -4,7 +4,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: worker
-  labels: { app: worker }
 spec:
   # No `replicas`: it starts at 1, and `kubectl scale` or an autoscaler owns it from there
   selector:
@@ -18,7 +17,6 @@ spec:
       containers:
         - name: worker
           image: cheese-shop-demo-api-service:v1
-          imagePullPolicy: IfNotPresent
           command: ["python", "-m", "api.worker"]
           resources:
             requests: { cpu: 100m, memory: 64Mi } # an autoscaler's percentages are of this request

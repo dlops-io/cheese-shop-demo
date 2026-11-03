@@ -5,7 +5,6 @@ kind: Deployment
 metadata:
   name: redis
 spec:
-  replicas: 1
   selector:
     matchLabels: { app: redis }
   template:
@@ -16,8 +15,7 @@ spec:
       containers:
         - name: redis
           image: redis:8.10.3-alpine
-          imagePullPolicy: IfNotPresent # loaded by `kind load`, like the app's images
-          args: ["--save", "", "--appendonly", "no"]
+          args: ["--save", ""]
           ports: [{ name: redis, containerPort: 6379 }]
           resources:
             requests: { cpu: 100m, memory: 64Mi }

@@ -3,7 +3,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: frontend-react
-  labels: { app: frontend-react }
 spec:
   selector:
     matchLabels: { app: frontend-react }
@@ -15,7 +14,6 @@ spec:
       containers:
         - name: frontend-react
           image: cheese-shop-demo-frontend-react:v1
-          imagePullPolicy: IfNotPresent
           ports: [{ name: http, containerPort: 80 }]
           resources:
             requests: { cpu: 50m, memory: 32Mi }

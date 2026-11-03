@@ -9,6 +9,6 @@ export default defineConfig({
     host: true, // listen on all interfaces, so the container's published port reaches it
     port: 5173,
     strictPort: true,
-    proxy: { '/api': process.env.API_URL || 'http://api-service:9000' },
+    proxy: { '/api': 'http://api-service:9000' },
   },
 })
