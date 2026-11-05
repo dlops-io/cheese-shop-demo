@@ -32,7 +32,7 @@ export default function App() {
       <header>
         <CheeseIcon size={56} />
         <div className="title">
-          <span className="eyebrow">AC215 · Frontend and API</span>
+          <span className="eyebrow">AC215 · Frontend and API + Scaling</span>
           <h1>Cheese Shop</h1>
         </div>
         <span className="pill">
