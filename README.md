@@ -7,6 +7,7 @@ You order cheeses, a worker ages them one at a time, and the page shows them mov
 
 ## Prerequisites
 - Docker, with ports 5810 and 9810 free. Nothing else: no Python or Node on your laptop.
+- For the Kubernetes tutorial: port 8080 free too, and about 2 GB of memory and 3 CPUs for Docker.
 
 ## Tutorial: Environment Setup
 
@@ -122,8 +123,126 @@ docker compose exec frontend-react npm run check
 ```
 
 ## Tutorial: Scaling with Kubernetes
+Our shop works, until many people order at once. We push it until it falls behind, then let Kubernetes
+run it and add workers by itself.
 
-Coming soon...
+### Set up, before class
+This downloads images, so do it on a good connection. It takes a few minutes the first time.
+
+1. From the `cheese-shop-demo` folder, open the deployment shell:
+```bash
+cd src/deployment
+```
+
+```bash
+./docker-shell.sh
+```
+
+2. Inside the container, create the cluster and start the shop on it:
+```bash
+./scripts/create-cluster.sh
+```
+
+```bash
+./scripts/deploy.sh
+```
+
+That makes a cluster of three nodes, each a Docker container on your laptop, and adds metrics-server,
+which measures CPU. Then it builds the production images, copies them into the nodes and starts the
+shop. Every `kubectl` command below runs in this shell. For a second one, run `./docker-shell.sh` again
+from `src/deployment`.
+
+### Overload the shop
+1. With the shop from APIs & Frontend still running in docker compose, order 500 cheeses from the
+   deployment shell:
+```bash
+./scripts/order.sh 500 http://localhost:5810
+```
+
+2. Watch http://localhost:5810. One worker ages one cheese every 1.5 s, so the last of the 500 is ready
+   in about 12 minutes, and every new order waits behind them.
+
+3. `docker compose up --scale worker=5` would help. But someone has to notice and type it, all five run
+   on one machine, and a worker that crashes stays down.
+
+4. Stop the compose shop: press Ctrl-C where `docker compose up` is running, then, from `src`:
+```bash
+docker compose down
+```
+
+### Run the shop on Kubernetes
+1. Open http://localhost:8080. It is the same shop, from the same code, now in production images.
+
+2. See what runs:
+```bash
+kubectl get deployments,pods
+```
+
+There are four Deployments, with one pod each: `frontend-react`, `api-service`, `redis` and `worker`.
+A Deployment says what to run and how many copies, and Kubernetes keeps it that way. Read
+`k8s/worker.yaml`.
+
+3. Copy the worker's pod name from `kubectl get pods`, and delete it:
+```bash
+kubectl delete pod <worker-pod-name>
+```
+
+Run `kubectl get pods` again: a new worker is already starting. Kubernetes noticed one was missing
+and replaced it. The old worker finished the cheese in its hands first, so nothing was lost.
+
+4. Run three copies of the API:
+```bash
+kubectl scale deployment api-service --replicas=3
+```
+
+Order some cheeses. The board looks just as before, whichever copy answers. This is the restart from
+APIs & Frontend paying off: the API keeps nothing, so any copy can answer any request.
+
+### Let Kubernetes add workers
+1. Turn on a HorizontalPodAutoscaler (HPA) for the worker:
+```bash
+kubectl apply -f k8s/hpa.yaml
+```
+
+Read `k8s/hpa.yaml`. The HPA reads each worker's CPU, and adds workers, up to 6, while they use more
+than 60% of what they asked for.
+
+2. In a second deployment shell, watch it, refreshed every 2 seconds:
+```bash
+watch -n 2 kubectl get hpa,pods
+```
+
+Wait for a number under `TARGETS`, such as `cpu: 1%/60%`. Until then the HPA has nothing to read.
+
+3. Order 500 again:
+```bash
+./scripts/order.sh 500
+```
+
+4. Watch the workers and the board:
+
+| | One worker in docker compose | Kubernetes with the HPA |
+| --- | --- | --- |
+| Workers | 1 | 1, then up to 6 |
+| First new worker | Never | About 15 to 30 s after the order |
+| All 500 ready | About 12.5 minutes | About 2.5 minutes |
+| Afterwards | 1 worker | Back to 1 worker, about 4 minutes after the order |
+
+Nobody typed a command, and the extra workers went away when the work did. The HPA only sees CPU, so
+it is always a little late: a queue of 500 and a queue of 5 look the same to it once the workers are
+busy. Scaling on the length of the queue itself is the next step, with a tool such as KEDA.
+
+### Clean up
+Delete the cluster, in the deployment shell:
+```bash
+./scripts/delete-cluster.sh
+```
+
+Leave the container with `exit`.
+
+To rehearse this tutorial before class, run `./scripts/verify.sh` in the deployment shell. It **deletes
+the cluster**, builds a new one, runs every step above except the compose one, checks each result and
+prints the numbers. It takes about 10 minutes.
 
 ## Troubleshooting
 
@@ -132,7 +251,10 @@ Coming soon...
 | `port is already allocated` | Another container is using port 5810 or 9810. Stop it, or run `docker ps` to find it |
 | `The container name ... is already in use` | A container from an earlier run is still there. Run `docker ps -a` to find it, then `docker rm -f` it |
 | The page says `The API answered 500` | Redis is not running. Run `docker compose up -d redis` in `src` |
-| Tickets stay in **Queued** | The worker is not running. Run `docker compose ps` in `src` to check |
+| Tickets stay in **Queued** | The worker is not running. Run `docker compose ps` in `src` to check, or `kubectl get pods` on the cluster |
+| `port is already allocated` when creating the cluster | Something is using port 8080. Stop it, or run `docker ps` to find it |
+| `TARGETS` shows `<unknown>` | Wait up to a minute for the HPA's first reading |
+| The worker jumps to 5 pods as soon as you apply the HPA | Its first reading still includes your last order. Wait for it to go back to one pod |
 
 ## Docker Cleanup
 
@@ -140,6 +262,8 @@ Press Ctrl-C where `docker compose up` is running, then, from `src`:
 ```bash
 docker compose down
 ```
+
+If you made the cluster, delete it from the deployment shell with `./scripts/delete-cluster.sh`.
 
 The next command removes images and containers you are not using, across all your projects, so check
 the list it shows you first:

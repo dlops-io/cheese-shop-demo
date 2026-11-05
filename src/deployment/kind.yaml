@@ -1,5 +1,5 @@
 # A three-node cluster, where each node is a Docker container on the laptop.
-# Kubernetes 1.36, not kind's default 1.37: KEDA 2.21 supports up to 1.36.
+# Kubernetes 1.36, the version this tutorial was tested on, rather than kind's default 1.37.
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 nodes:

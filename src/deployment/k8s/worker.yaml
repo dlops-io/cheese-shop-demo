@@ -1,4 +1,4 @@
-# The workers, out of the API and into their own pods: the same image, running api/worker.py.
+# The workers: the API's image, running api/worker.py.
 # There is no Service, because nothing calls a worker. Workers go to Redis and take tickets.
 apiVersion: apps/v1
 kind: Deployment

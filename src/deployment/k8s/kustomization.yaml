@@ -1,0 +1,9 @@
+# The whole shop: `kubectl apply -k k8s`. The HPA is not in here: turning it on is a step of its own.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: cheese-shop
+resources:
+  - frontend-react.yaml
+  - api-service.yaml
+  - redis.yaml
+  - worker.yaml

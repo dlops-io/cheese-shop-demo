@@ -1,4 +1,4 @@
-# The shop now lives here, outside the API. No persistence: a shop that empties when Redis restarts is
+# The shop lives here, outside the API. No persistence: a shop that empties when Redis restarts is
 # fine for a tutorial, and it keeps the StatefulSet and volume conversation for an app that needs one.
 apiVersion: apps/v1
 kind: Deployment

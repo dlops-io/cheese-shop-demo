@@ -1,5 +1,5 @@
-# The API from Part 1, unchanged. A Deployment keeps its pods running; a Service gives them one
-# stable name. The shop lives in each pod's memory, which is what the first step of the tutorial shows.
+# The API. A Deployment keeps its pods running; a Service gives them one stable name. The shop is in
+# Redis, so any number of these pods can answer any request.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
