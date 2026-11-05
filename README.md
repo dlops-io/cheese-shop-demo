@@ -3,25 +3,7 @@
 In this tutorial we run a small full-stack app on our laptop, in four containers on one Docker network.
 You order cheeses, a worker ages them one at a time, and the page shows them moving across the board.
 
-```mermaid
-flowchart LR
-    browser["Browser<br/>localhost:5810"]
-    subgraph docker["Docker network"]
-        frontend["frontend-react<br/>React page, Vite"]
-        api["api-service<br/>FastAPI"]
-        subgraph redis["redis"]
-            tickets[("tickets<br/>a hash")]
-            queue[("queue<br/>a list")]
-        end
-        worker["worker<br/>ages one cheese at a time"]
-    end
-    browser -->|"/api/orders"| frontend
-    frontend -->|"forwards /api to :9000"| api
-    api -->|"saves and reads tickets"| tickets
-    api -->|"adds ids"| queue
-    queue -->|"BLPOP: next id"| worker
-    worker -->|"aging, then ready"| tickets
-```
+![The Cheese Shop: the browser, frontend-react, api-service, Redis and the worker](images/architecture.svg)
 
 The **How does it work?** section at the bottom of the page animates these flows.
 
