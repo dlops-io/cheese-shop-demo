@@ -11,11 +11,35 @@ export const NODES = {
     title: 'frontend-react',
     sub: 'Vite dev server',
   },
-  routes: { x: 545, y: 195, w: 135, h: 64, badge: 'API', title: 'Routes', sub: '/api/orders' },
-  tickets: { x: 545, y: 330, w: 135, h: 64, badge: '#', title: 'tickets', sub: 'in memory' },
-  queue: { x: 735, y: 115, w: 205, h: 60, badge: '≡', title: 'queue', sub: 'waiting for a worker' },
-  worker1: { x: 735, y: 235, w: 98, h: 60, title: 'worker-1', sub: 'aging', color: '#7fc9b7' },
-  worker2: { x: 842, y: 235, w: 98, h: 60, title: 'worker-2', sub: 'aging', color: '#f0a23f' },
+  api: { x: 545, y: 195, w: 150, h: 64, badge: 'API', title: 'api-service', sub: 'FastAPI' },
+  tickets: {
+    x: 750,
+    y: 120,
+    w: 195,
+    h: 60,
+    badge: '#',
+    title: 'tickets',
+    sub: 'a hash: id → ticket',
+  },
+  queue: {
+    x: 750,
+    y: 215,
+    w: 195,
+    h: 60,
+    badge: '≡',
+    title: 'queue',
+    sub: 'a list of ids waiting',
+  },
+  worker: {
+    x: 750,
+    y: 360,
+    w: 195,
+    h: 60,
+    badge: 'W',
+    title: 'worker',
+    sub: 'ages one cheese at a time',
+    color: '#7fc9b7',
+  },
 }
 
 // Each edge is a list of corners, drawn from `from` to `to`; hops can travel it backwards
@@ -30,73 +54,46 @@ export const EDGES = {
   },
   proxy: {
     from: 'frontend',
-    to: 'routes',
+    to: 'api',
     points: [
       [475, 227],
       [545, 227],
     ],
   },
   store: {
-    from: 'routes',
+    from: 'api',
     to: 'tickets',
     points: [
-      [612, 259],
-      [612, 330],
+      [695, 212],
+      [722, 212],
+      [722, 150],
+      [750, 150],
     ],
   },
   enqueue: {
-    from: 'routes',
+    from: 'api',
     to: 'queue',
     points: [
-      [680, 215],
-      [708, 215],
-      [708, 145],
-      [735, 145],
+      [695, 245],
+      [750, 245],
     ],
   },
-  take1: {
+  take: {
     from: 'queue',
-    to: 'worker1',
+    to: 'worker',
     points: [
-      [784, 175],
-      [784, 235],
+      [847, 275],
+      [847, 360],
     ],
   },
-  take2: {
-    from: 'queue',
-    to: 'worker2',
-    points: [
-      [891, 175],
-      [891, 235],
-    ],
-  },
-  update1: {
-    from: 'worker1',
+  update: {
+    from: 'worker',
     to: 'tickets',
     points: [
-      [784, 295],
-      [784, 352],
-      [680, 352],
-    ],
-  },
-  update2: {
-    from: 'worker2',
-    to: 'tickets',
-    points: [
-      [891, 295],
-      [891, 372],
-      [680, 372],
-    ],
-  },
-  direct: {
-    from: 'browser',
-    to: 'routes',
-    points: [
-      [145, 172],
-      [145, 135],
-      [502, 135],
-      [502, 207],
-      [545, 207],
+      [945, 390],
+      [970, 390],
+      [970, 150],
+      [945, 150],
     ],
   },
 }
@@ -166,7 +163,7 @@ export const SCENARIOS = [
           'Vite sees /api and forwards the request, full path included, to http://api-service:9000.',
       },
       {
-        at: 'routes',
+        at: 'api',
         label: 'Order model ✓',
         kind: 'local',
         caption:
@@ -176,56 +173,60 @@ export const SCENARIOS = [
         path: [fwd('store')],
         label: '3 new tickets',
         kind: 'data',
-        caption: 'place_order creates 3 tickets in memory, each one "queued".',
+        caption:
+          'place_order numbers each ticket with INCR next_id and saves it in Redis, in the tickets hash, as "queued".',
       },
       {
         path: [fwd('enqueue')],
-        label: '3 tickets',
+        label: 'RPUSH queue',
         kind: 'data',
-        caption: 'It puts them in the queue for the workers.',
+        caption: 'It adds each ticket id to the end of the queue list.',
       },
       {
         path: FROM_API,
         label: '201 + tickets',
         kind: 'response',
-        caption: 'The API answers right away. It does not wait for the cheese to age.',
+        caption:
+          "The API answers right away. It does not wait for the cheese to age: that is the worker's job.",
       },
     ],
   },
   {
     title: 'Age a cheese',
-    where: 'service.py · worker()',
+    where: 'worker.py',
     hops: [
       {
-        path: [fwd('take1')],
-        label: 'ticket #1',
-        kind: 'data',
-        caption: 'worker-1 has been waiting at queue.get(). It takes the first ticket.',
-      },
-      {
-        path: [fwd('update1')],
-        label: 'state: aging',
-        kind: 'data',
-        caption: 'It marks the ticket "aging" and writes its own name on it.',
-      },
-      {
-        path: [fwd('take2')],
-        label: 'ticket #2',
-        kind: 'data',
-        caption: 'worker-2 does the same with the next ticket.',
-      },
-      {
-        at: 'worker1',
-        label: 'await 1.5 s',
+        at: 'worker',
+        label: 'BLPOP queue',
         kind: 'local',
         caption:
-          'Each worker waits with await asyncio.sleep. While they wait, the API is free to answer requests.',
+          'The worker is its own container, waiting at BLPOP: Redis answers as soon as an id is in the queue.',
       },
       {
-        path: [fwd('update1')],
+        path: [fwd('take')],
+        label: 'ticket #1',
+        kind: 'data',
+        caption:
+          'It takes the oldest id off the queue. Each id goes to one worker only, however many are running.',
+      },
+      {
+        path: [fwd('update')],
+        label: 'state: aging',
+        kind: 'data',
+        caption: 'It saves the ticket as "aging", with its own name on it.',
+      },
+      {
+        at: 'worker',
+        label: 'burn 0.75 s of CPU',
+        kind: 'local',
+        caption:
+          'It ages the cheese: real CPU work, about 1.5 s with the half a CPU this container gets.',
+      },
+      {
+        path: [fwd('update')],
         label: 'state: ready',
         kind: 'data',
-        caption: 'The cheese is ready, and worker-1 goes back to the queue for another ticket.',
+        caption: 'It saves the ticket as "ready", and goes back to the queue for the next one.',
       },
     ],
   },
@@ -243,19 +244,19 @@ export const SCENARIOS = [
         path: TO_API,
         label: 'GET /api/orders',
         kind: 'request',
-        caption: 'The request goes through Vite to the same API.',
+        caption: 'The request goes through Vite to the API.',
       },
       {
         path: [fwd('store')],
-        label: 'read tickets',
+        label: 'HVALS tickets',
         kind: 'request',
-        caption: 'list_orders reads every ticket in memory.',
+        caption: 'list_orders reads every ticket from the hash in Redis.',
       },
       {
         path: [rev('store')],
         label: 'queued · aging · ready',
         kind: 'data',
-        caption: 'It groups them by state.',
+        caption: 'It groups them by state, in id order.',
       },
       { path: FROM_API, label: 'JSON', kind: 'response', caption: 'The shop comes back as JSON.' },
       {
@@ -263,71 +264,38 @@ export const SCENARIOS = [
         label: 'setShop(...)',
         kind: 'local',
         caption:
-          'setShop stores the answer and React redraws the board. The API owns the shop; the page only shows it.',
+          'setShop stores the answer and React redraws the board. Redis keeps the shop; the page only shows it.',
       },
     ],
   },
   {
-    title: 'What if it blocks?',
-    where: 'time.sleep vs await',
+    title: 'Restart the API',
+    where: 'docker compose restart api-service',
     hops: [
       {
-        at: 'worker1',
-        label: 'time.sleep(1.5)',
+        at: 'api',
+        label: 'restart',
         kind: 'problem',
-        caption: 'Suppose a worker calls time.sleep instead of await asyncio.sleep.',
+        caption: 'The API stops and starts again, as it would after a crash or a new release.',
       },
       {
-        path: TO_API,
+        at: 'tickets',
+        label: 'still here',
+        kind: 'data',
+        caption: 'The tickets were never in the API: they are in Redis, so nothing is lost.',
+      },
+      {
+        path: [...TO_API, fwd('store')],
         label: 'GET /api/orders',
         kind: 'request',
-        caption: "The page's next poll arrives at the API.",
+        caption: 'The next poll reaches the new API, which reads the same hash.',
       },
       {
-        at: 'routes',
-        label: 'stuck',
-        kind: 'problem',
-        caption:
-          'Routes and workers share one event loop, and time.sleep never gives it back, so this request has to wait.',
-      },
-      {
-        path: FROM_API,
-        label: 'late answer',
+        path: [rev('store'), ...FROM_API],
+        label: 'the same shop',
         kind: 'response',
         caption:
-          'The answer only comes when the sleeping stops: 8.9 s instead of an instant, in our test with 6 cheeses.',
-      },
-    ],
-  },
-  {
-    title: 'Blocked by CORS',
-    where: 'api.js · the browser',
-    hops: [
-      {
-        at: 'browser',
-        label: "BASE = ':9810'",
-        kind: 'problem',
-        caption: 'Suppose api.js calls http://localhost:9810 directly, skipping Vite.',
-      },
-      {
-        path: [fwd('direct')],
-        label: 'GET :9810/api/orders',
-        kind: 'request',
-        caption:
-          'The page is on port 5810 and the API is on 9810. A different port means a different origin.',
-      },
-      {
-        path: [rev('direct')],
-        label: 'answer',
-        kind: 'response',
-        caption: 'The API answers as usual, but nothing in the answer says that origin is allowed.',
-      },
-      {
-        at: 'browser',
-        label: 'CORS error',
-        kind: 'problem',
-        caption:
-          'So the browser refuses to hand the answer to the page. Going through one origin avoids the problem.',
+          'The page carries on as if nothing happened. An API that keeps nothing can restart, or run as many copies as we like.',
       },
     ],
   },

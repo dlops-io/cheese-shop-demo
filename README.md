@@ -1,12 +1,15 @@
-# Cheese Shop
+# Cheese Shop Demo
 
-A small full-stack app for two lectures. You order cheeses, workers age them one at a time, and the
+A small full-stack app for demonstrating APIs & Frontend. You order cheeses, workers age them one at a time, and the
 page shows them moving across the board.
 
-- **Part 1 (Lecture 18):** a typical web app: a React frontend, a FastAPI backend, Redis for the data
+- **Part 1 (Lecture APIs & Frontend):** a typical web app: a React frontend, a FastAPI backend, Redis for the data
   and a worker for the slow jobs, in four containers.
-- **Part 2 (Lecture 19):** the same app under load, on a Kubernetes cluster on your laptop.
 
+- **Part 2 (Lecture Scaling with Kubernetes):** the same app under load, on a Kubernetes cluster on your laptop.
+
+
+** Application Architecture: **
 ```
 browser -> frontend-react -> api-service -> redis <- worker
 ```
@@ -24,7 +27,7 @@ browser -> frontend-react -> api-service -> redis <- worker
 
 **You need:** Docker. Nothing else: no Python or Node on your laptop.
 
-## Part 1: Frontend and API (Lecture 18)
+## Part 1: APIs & Frontend
 
 ### 1. Start the shop
 
@@ -150,7 +153,7 @@ Press Ctrl-C where `docker compose up` is running, then:
 docker compose down
 ```
 
-## Part 2: Scaling on Kubernetes (Lecture 19)
+## Part 2: Scaling with Kubernetes
 
 > **Being rewritten for Lecture 19.** Part 1 now runs the shop in Redis from the start, and the steps
 > below still begin from the old version that kept it in the API's memory, so they do not work as

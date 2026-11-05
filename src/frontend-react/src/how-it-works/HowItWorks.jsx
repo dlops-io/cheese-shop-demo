@@ -229,10 +229,6 @@ export default function HowItWorks() {
   const visitedEdges = new Set(scenario.hops.slice(0, hopIndex).flatMap(hopEdges))
   const activeEdges = new Map(hop.path ?? [])
   const activeNodes = new Set(hopNodes(hop))
-  // The direct line only exists in the CORS scenario, so it must not look like a real connection
-  const visibleEdges = Object.entries(EDGES).filter(
-    ([id]) => id !== 'direct' || scenarioEdges.has(id),
-  )
   const nodeState = (id) =>
     activeNodes.has(id) ? 'active' : scenarioNodes.has(id) ? 'normal' : 'dim'
   const edgeState = (id) =>
@@ -242,8 +238,8 @@ export default function HowItWorks() {
     <section className="how">
       <h2>How does it work?</h2>
       <p className="intro">
-        The page runs in your browser. The API runs in a container and keeps the shop in memory.
-        Pick a scenario to follow the data.
+        The page runs in your browser. The API takes orders, Redis keeps the shop, and a worker ages
+        the cheeses, each in its own container. Pick a scenario to follow the data.
       </p>
 
       <div className="how-card">
@@ -265,22 +261,22 @@ export default function HowItWorks() {
           <svg
             viewBox="0 0 1000 480"
             role="img"
-            aria-label="The browser talks to the Vite dev server, which forwards /api to the FastAPI routes. The routes keep tickets in memory and put them in a queue, and two workers take tickets from the queue and age them."
+            aria-label="The browser talks to the Vite dev server, which forwards /api to the FastAPI service. The API saves tickets in Redis and puts their ids in a queue there, and a worker takes ids from the queue and ages the cheeses."
           >
             <rect x={10} y={10} width={980} height={460} rx={20} className="zone" />
             <text x={30} y={38} className="zone-label">
               Your laptop
             </text>
-            <rect x={285} y={50} width={690} height={405} rx={14} className="group" />
+            <rect x={285} y={50} width={695} height={405} rx={14} className="group" />
             <text x={300} y={72} className="group-label">
               Docker · cheese-shop-demo-network
             </text>
-            <rect x={520} y={90} width={440} height={350} rx={14} className="group" />
-            <text x={535} y={112} className="group-label">
-              api-service · FastAPI
+            <rect x={735} y={85} width={225} height={205} rx={14} className="group" />
+            <text x={750} y={107} className="group-label">
+              redis · :6379
             </text>
 
-            {visibleEdges.map(([id, { points }]) => (
+            {Object.entries(EDGES).map(([id, { points }]) => (
               <g key={id}>
                 <path d={svgPath(points)} className={`edge ${edgeState(id)}`} />
                 {activeEdges.has(id) && (
@@ -299,11 +295,6 @@ export default function HowItWorks() {
             <text x={510} y={246} textAnchor="middle" className="edge-label">
               :9000
             </text>
-            {scenarioEdges.has('direct') && (
-              <text x={320} y={127} textAnchor="middle" className="edge-label">
-                :9810, a different origin
-              </text>
-            )}
 
             {Object.keys(NODES).map((id) => (
               <Node key={id} id={id} state={nodeState(id)} color={color} />

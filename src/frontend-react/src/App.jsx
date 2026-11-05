@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getOrders, placeOrder } from './api'
 import Board, { CheeseIcon } from './Board'
+import HowItWorks from './how-it-works/HowItWorks'
 import OrderForm from './OrderForm'
 
 export default function App() {
@@ -53,6 +54,8 @@ export default function App() {
       <Board shop={shop} />
 
       <p className="note">Workers age each cheese for {shop.age_s} s.</p>
+
+      <HowItWorks />
     </main>
   )
 }
