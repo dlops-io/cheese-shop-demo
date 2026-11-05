@@ -1,0 +1,69 @@
+# The whole shop in one command, from this folder:
+#   docker compose up --build       build the images and start all four containers
+#   docker compose down             stop them all
+#
+#   browser -> frontend-react -> api-service -> redis <- worker
+#
+# The code is mounted, so the API and the frontend reload when you save. To get a shell in one, run its
+# docker-shell.sh: it finds the running container and opens bash in it.
+
+name: cheese-shop-demo # so the worker is cheese-shop-demo-worker-1, not src-worker-1
+networks:
+    default:
+        name: cheese-shop-demo-network # the network the docker-shell.sh scripts use
+volumes:
+    uv-cache:
+        name: cheese-shop-demo-api-service-uv-cache # the volume api-service/docker-shell.sh uses
+    node_modules:
+        name: cheese-shop-demo-frontend-react-node_modules # the volume frontend-react/docker-shell.sh uses
+services:
+    # Where the shop lives: the tickets, and the queue of tickets waiting for a worker
+    redis:
+        image: redis:8.10.3-alpine
+        container_name: cheese-shop-demo-redis
+        command: ["redis-server", "--save", ""] # nothing on disk: the shop empties when Redis stops
+
+    # The API: takes orders and answers questions about the shop, all from Redis
+    api-service:
+        build:
+            context: ./api-service
+            dockerfile: Dockerfile.dev
+        image: cheese-shop-demo-api-service
+        container_name: cheese-shop-demo-api-service
+        entrypoint: ["/bin/bash", "-c", "uv sync --frozen && uvicorn api.service:app --host 0.0.0.0 --port 9000 --reload --reload-dir api/"]
+        ports:
+            - 9810:9000
+        volumes:
+            - ./api-service:/app
+            - uv-cache:/home/app/.cache/uv
+        depends_on:
+            - redis
+
+    # The worker: takes a ticket from the queue and ages the cheese, one at a time. The same image as the
+    # API, running a different program. `docker compose up --scale worker=3` runs three.
+    worker:
+        image: cheese-shop-demo-api-service
+        entrypoint: ["/bin/bash", "-c", "uv sync --frozen && python -m api.worker"]
+        cpus: 0.5 # as on the cluster, so a cheese takes about 1.5 s
+        volumes:
+            - ./api-service:/app
+            - uv-cache:/home/app/.cache/uv
+        depends_on:
+            - redis
+            - api-service # which builds the image
+
+    # The page: Vite in development, passing /api to api-service
+    frontend-react:
+        build:
+            context: ./frontend-react
+            dockerfile: Dockerfile.dev
+        image: cheese-shop-demo-frontend-react
+        container_name: cheese-shop-demo-frontend-react
+        entrypoint: ["/bin/bash", "-c", "npm install --no-fund --no-audit && npm run dev"]
+        ports:
+            - 5810:5173
+        volumes:
+            - ./frontend-react:/app
+            - node_modules:/app/node_modules
+        depends_on:
+            - api-service

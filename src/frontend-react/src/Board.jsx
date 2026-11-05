@@ -10,10 +10,10 @@ function workerColors(tickets) {
   )
 }
 
-// A pod's name is long: worker-6f7d9c8b5-x2k4p reads as worker-x2k4p. worker-1 stays as it is.
+// A pod's name is long: worker-6f7d9c8b5-x2k4p reads as worker-x2k4p. A container's ID stays as it is.
 function shortName(worker) {
   const parts = worker.split('-')
-  return `${parts[0]}-${parts.at(-1)}`
+  return parts.length > 2 ? `${parts[0]}-${parts.at(-1)}` : worker
 }
 
 export function CheeseIcon({ size = 22 }) {

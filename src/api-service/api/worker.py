@@ -1,7 +1,7 @@
 """A worker: take a ticket from the queue, age the cheese, repeat.
 
-It ages one cheese at a time, so to age more at once, run more pods. Aging burns real CPU here, unlike
-the `await asyncio.sleep` in service.py, because CPU is what the autoscaler measures.
+It ages one cheese at a time, so to age more at once, run more workers. Aging burns real CPU, as real
+work would, and CPU is what an autoscaler measures.
 
     python -m api.worker
 """
@@ -15,7 +15,7 @@ import time
 import redis
 
 CPU_S = 0.75  # of CPU time per cheese: about 1.5 s on the clock, at the pod's limit of half a CPU
-POD = socket.gethostname()  # the pod's name in Kubernetes
+POD = socket.gethostname()  # the container's ID in Docker, the pod's name in Kubernetes
 
 db = redis.Redis(host=os.getenv("REDIS_HOST", "redis"), decode_responses=True)
 stopping = False

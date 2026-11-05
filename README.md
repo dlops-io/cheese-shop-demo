@@ -3,36 +3,56 @@
 A small full-stack app for two lectures. You order cheeses, workers age them one at a time, and the
 page shows them moving across the board.
 
-- **Part 1 (Lecture 18):** one React page and one FastAPI service, in two containers.
-- **Part 2 (Lecture 19):** the same app on a Kubernetes cluster on your laptop. We scale it, watch it
-  break, fix it, and let autoscalers take over.
+- **Part 1 (Lecture 18):** a typical web app: a React frontend, a FastAPI backend, Redis for the data
+  and a worker for the slow jobs, in four containers.
+- **Part 2 (Lecture 19):** the same app under load, on a Kubernetes cluster on your laptop.
+
+```
+browser -> frontend-react -> api-service -> redis <- worker
+```
 
 | Folder | Container | On your laptop | What it is |
 | --- | --- | --- | --- |
-| `src/api-service/` | `cheese-shop-demo-api-service` | http://localhost:9810 | FastAPI: Part 1 is all in `api/service.py` |
-| `src/frontend-react/` | `cheese-shop-demo-frontend-react` | http://localhost:5810 | React + Vite in development, nginx in production |
+| `src/frontend-react/` | `cheese-shop-demo-frontend-react` | http://localhost:5810 | The page: React + Vite in development, nginx in production |
+| `src/api-service/` | `cheese-shop-demo-api-service` | http://localhost:9810 | The backend: FastAPI, in `api/service.py` |
+| none | `cheese-shop-demo-redis` | none | Redis: the tickets, and the queue of tickets waiting for a worker |
+| `src/api-service/` | `cheese-shop-demo-worker-1` | none | The worker: ages the cheeses, in `api/worker.py`. The same image as the API |
 | `src/deployment/` | `cheese-shop-demo-deployment` | none | Part 2: `kind`, `kubectl` and the cluster's files |
 
-Each app folder has a `docker-shell.sh` that builds a development image (`Dockerfile.dev`) and opens
-a shell in it, with your code mounted. `Dockerfile` in the same folder is the production image.
+`src/docker-compose.yml` describes the four containers of Part 1. Each app folder also has a
+`docker-shell.sh`, which opens a shell in its running container.
 
 **You need:** Docker. Nothing else: no Python or Node on your laptop.
 
-## Part 1: API and frontend (Lecture 18)
+## Part 1: Frontend and API (Lecture 18)
 
-You can skip `api/service_redis.py` and `api/worker.py` for now: Part 2 adds them.
-
-### 1. Start the API
+### 1. Start the shop
 
 ```bash
-cd src/api-service && ./docker-shell.sh
+cd src
 ```
-
-Inside the container:
 
 ```bash
-api_server
+docker compose up --build
 ```
+
+The first run takes a few minutes to build the images. When the log says `VITE ... ready`, open
+http://localhost:5810 (Vite's log says 5173, which is the port inside the container) and order some
+cheeses.
+
+Open the Network tab in your browser's developer tools: the page calls `/api/orders` twice a second and
+draws whatever comes back. The page only shows the shop. Each container has one job:
+
+| Container | Its job |
+| --- | --- |
+| `frontend-react` | Draws the page. The browser calls `/api/...` on the page's own origin, and Vite forwards that to `http://api-service:9000` (see `vite.config.js`) |
+| `api-service` | Takes orders and answers questions about the shop. It checks every order before anything is saved |
+| `redis` | Keeps the shop: a hash of tickets, and a list of tickets waiting |
+| `worker` | Takes the next ticket off the list and ages the cheese. The slow work happens here, not in a request |
+
+`api-service` is the API's name on the Docker network, and 9000 is its port inside that network.
+
+### 2. Try the API
 
 Open http://localhost:9810/api/docs and try these, in order:
 
@@ -44,48 +64,56 @@ Open http://localhost:9810/api/docs and try these, in order:
 | `GET /api/orders/9999` | `404`: there is no such ticket |
 | `POST /api/orders` with `{"count": 51}` | `422`: `Field(ge=1, le=50)` refused it before our code ran |
 
-### 2. Start the frontend
+### 3. Look inside Redis
 
-In a second terminal:
-
-```bash
-cd src/frontend-react && ./docker-shell.sh
-```
-
-Inside the container:
+In a second terminal, open Redis's own command line:
 
 ```bash
-npm run dev
+docker exec -it cheese-shop-demo-redis redis-cli
 ```
 
-Open http://localhost:5810 (Vite's log says 5173, which is the port inside the container) and order
-some cheeses. Open the Network tab in your browser's developer tools: the page calls `/api/orders`
-twice a second and draws whatever comes back. The API owns the shop; the page only shows it.
+Order 50 cheeses on the page, then ask Redis:
 
-The page calls its own origin, and Vite forwards `/api` to `http://api-service:9000` (see
-`vite.config.js`). `api-service` is the API container's alias on the Docker network, and 9000 is its
-port inside that network.
+```
+LLEN queue
+HGET tickets 1
+```
 
-The **How does it work?** section at the bottom of the page animates these flows. Its code is in
-`src/how-it-works/` and only explains the app, so you can skip that folder when reading the code.
+`LLEN` is how many tickets are waiting. `HGET` is one ticket, exactly as the API returns it. Leave
+with `exit`.
 
-### 3. See why `await` matters
+Now restart the API:
 
-In `api/service.py`, add `import time` and change the worker's sleep:
+```bash
+docker compose restart api-service
+```
+
+Reload the page: every ticket is still there. The API keeps nothing of its own, so it can restart, or
+run as many copies as we like. Part 2 needs exactly that.
+
+### 4. See why `await` matters
+
+In `api/service.py`, add `import time` at the top, and this as the first line of `place_order`:
 
 ```python
-time.sleep(AGE_S)  # instead of: await asyncio.sleep(AGE_S)
+    time.sleep(3)  # pretend to check the payment
 ```
 
-Save and order 10 cheeses. The page stops moving. `await` tells Python "do something else while this
-waits", and `time.sleep` does not: the whole API is stuck, so even `GET /api/orders` has to wait.
-A call to an LLM can block an API in the same way, which is why the chat routes in `cheese-app-v2`
-are plain `def`: FastAPI runs those in a thread, so one slow answer does not stop the API. Put the
-line back.
+Save, and the API reloads. Order a few cheeses. The whole page stops moving for 3 seconds, because
+`time.sleep` holds up the API: even `GET /api/orders` has to wait. Now change it:
 
-### 4. See CORS fail, on purpose
+```python
+    await asyncio.sleep(3)  # pretend to check the payment
+```
 
-In `src/api.js`, change the base address and save:
+with `import asyncio` at the top, and order again. Only your order waits, and the board keeps moving.
+`await` tells Python "do something else while this waits". A call to an LLM waits in the same way,
+which is why the chat routes in `cheese-app-v2` are plain `def`: FastAPI runs those in a thread, so
+one slow answer does not stop the API. Take the line out again.
+
+### 5. See CORS fail, on purpose
+
+In `src/frontend-react/src/api.js`, change the base address and save:
 
 ```js
 const BASE = 'http://localhost:9810'
@@ -98,9 +126,9 @@ There are two fixes. The API can list the origins it allows (`CORSMiddleware` in
 browser can talk to one origin only. This course uses the second: nothing to configure, and the same
 build runs everywhere. Put `const BASE = ''` back.
 
-### 5. Build the production image
+### 6. Build the production image
 
-Stop `npm run dev` with Ctrl-C and leave the container with `exit`. Then, from `src/frontend-react`:
+From `src/frontend-react`, with the shop still running:
 
 ```bash
 docker build -t cheese-shop-demo-frontend-react:v1 .
@@ -111,11 +139,22 @@ docker run --rm --network cheese-shop-demo-network -p 8080:80 cheese-shop-demo-f
 ```
 
 Open http://localhost:8080. There is no Vite and no Node now: nginx serves the built files and passes
-`/api` to the same API container (see `nginx.conf`). The browser code did not change.
+`/api` to the same API container (see `nginx.conf`). The browser code did not change. Stop it with
+Ctrl-C.
 
-Stop it with Ctrl-C before Part 2, which needs port 8080.
+### 7. Stop the shop
+
+Press Ctrl-C where `docker compose up` is running, then:
+
+```bash
+docker compose down
+```
 
 ## Part 2: Scaling on Kubernetes (Lecture 19)
+
+> **Being rewritten for Lecture 19.** Part 1 now runs the shop in Redis from the start, and the steps
+> below still begin from the old version that kept it in the API's memory, so they do not work as
+> written yet.
 
 `kind` runs Kubernetes in Docker: each node of the cluster is a container on your laptop. With
 everything running it uses about 2 GB of memory. Six workers at full speed want 3 CPUs: with fewer,
@@ -370,7 +409,7 @@ Leave the container with `exit`.
 | What you see | What to do |
 | --- | --- |
 | The worker jumps to 5 pods as soon as you apply the HPA | Its first reading still includes your last order. Wait for it to return to one pod |
-| `port is already allocated` when creating the cluster | Something is using port 8080. Stop it, such as the container from Part 1's step 5 |
+| `port is already allocated` when creating the cluster | Something is using port 8080. Stop it, such as the container from Part 1's step 6 |
 | `TARGETS` shows `<unknown>` | Wait up to a minute for the first reading |
 | `already managed by the hpa` when applying KEDA | Remove the HPA first: `kubectl delete -f k8s/3-hpa.yaml` |
 | Orders sit in the queue and no worker starts | You removed KEDA with the worker at zero, and a plain HPA cannot start from zero. Run `kubectl scale deployment worker --replicas=1` |
