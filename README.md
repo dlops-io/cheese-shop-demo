@@ -3,16 +3,7 @@
 In this tutorial we run a small full-stack app on our laptop, in four containers on one Docker network.
 You order cheeses, a worker ages them one at a time, and the page shows them moving across the board.
 
-| Folder | Container | On your laptop | What it is |
-| --- | --- | --- | --- |
-| `src/frontend-react/` | `cheese-shop-demo-frontend-react` | http://localhost:5810 | The page: React + Vite in development, nginx in production |
-| `src/api-service/` | `cheese-shop-demo-api-service` | http://localhost:9810 | FastAPI: takes orders and answers questions about the shop |
-| none | `cheese-shop-demo-redis` | none | Redis: keeps the tickets, and the queue of tickets waiting for a worker |
-| `src/api-service/` | `cheese-shop-demo-worker-1` | none | The worker: ages the cheeses. The same image as the API, running a different program |
-
-```
-browser -> frontend-react -> api-service -> redis <- worker
-```
+![Application Architecture](images/llm-rag-flow-1.png)
 
 ## Prerequisites
 - Docker, with ports 5810 and 9810 free. Nothing else: no Python or Node on your laptop.
