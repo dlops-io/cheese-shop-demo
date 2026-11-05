@@ -14,13 +14,13 @@ if [[ $# -eq 0 ]]; then
     echo -en "\033[92m
 The following commands are available:
     ./scripts/create-cluster.sh
-        Create the local cluster: 1 control plane and 2 workers, with metrics-server
+        Create the local cluster: 1 control plane and 2 workers, with metrics-server and KEDA
     ./scripts/deploy.sh
         Build the images, load them into the cluster and start the shop: http://localhost:8080
     ./scripts/order.sh 500
         Order any number of cheeses (add http://localhost:5810 for the shop in docker compose)
     ./scripts/verify.sh
-        Rehearse the Kubernetes tutorial on a new cluster, about 10 minutes (it deletes the one you have)
+        Rehearse the Kubernetes tutorial on a new cluster, about 15 minutes (it deletes the one you have)
     ./scripts/delete-cluster.sh
         Delete the cluster
 \033[0m

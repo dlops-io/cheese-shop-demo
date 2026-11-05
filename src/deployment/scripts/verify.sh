@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Rehearse the Kubernetes tutorial before class: delete the cluster, build a new one, run steps 2 and 3
-# and check each result. Takes about 10 minutes, prints the numbers for the slide, and exits non-zero if
-# a check failed. Step 1 runs in docker compose and needs no rehearsal: 500 cheeses at 1.5 s each.
+# Rehearse the Kubernetes tutorial before class: delete the cluster, build a new one, run every step on
+# it and check each result. Takes about 15 minutes, prints the numbers for the slides, and exits non-zero
+# if a check failed. The overload step runs in docker compose and needs no rehearsal: 500 cheeses at
+# 1.5 s each. Each 500-cheese run's timeline is kept in .local/ (seconds, queue, workers, CPU %).
 #   ./scripts/verify.sh
 set -uo pipefail
 cd "$(dirname -- "${BASH_SOURCE[0]}")/.."
@@ -109,7 +110,7 @@ step "Set up, before class"
 check "The page answers" curl -fsS -o /dev/null "${page}/"
 check "The API answers through the page, with an empty shop" shop_is_empty
 
-step "Step 2: Kubernetes runs the same app"
+step "Run the shop on Kubernetes"
 for app in frontend-react api-service redis worker; do
     wait_until 60 pod_count_is "${app}" 1 # deploy.sh restarts them, so an old pod may still be leaving
     check "One ${app} pod" pod_count_is "${app}" 1
@@ -136,7 +137,7 @@ measure 20 1 0
 check "Every poll showed the same shop, whichever API pod answered (20 in ${done_s:-?} s)" finished
 check "No ticket number repeats" [ "$(shop | jq '[.ready[].id] | unique | length')" -eq "${ordered}" ]
 
-step "Step 3: an autoscaler fixes it"
+step "Let Kubernetes add workers: the HPA on CPU"
 sleep 45 # the time it takes to talk through it: an HPA applied sooner reads the last order's CPU
 kubectl apply -f k8s/hpa.yaml >/dev/null
 reading_from=$SECONDS
@@ -150,14 +151,51 @@ check "The first new worker arrived within a minute (${more_s:-never} s)" [ "${m
 check "It reached 6 workers (${peak})" [ "${peak}" -eq 6 ]
 check "All 500 finished in about 2.5 minutes, none lost (${done_s:-?} s)" finished
 check "That is far faster than one worker's 750 s (${done_s:-?} s)" between "${done_s:-0}" 100 220
+read -r low high from to < <(awk -F'\t' '$2 <= 300 && $2 >= 30 {
+    if (!low || $4 < low) low = $4
+    if ($4 > high) high = $4
+    if (!from) from = $2
+    to = $2
+} END { print low + 0, high + 0, from + 0, to + 0 }' "${timeline}")
+check "CPU stayed at its ceiling while the queue fell from ${from} to ${to} (${low}% to ${high}%)" \
+    between "${low}" 450 520
 check "It went back to one worker (${settled_s:-never} s)" [ -n "${settled_s}" ]
+cp "${timeline}" .local/timeline-cpu.tsv
+hpa_row="${more_s:--} ${peak} ${done_s:--} ${settled_s:--}"
+
+step "Scale on the queue with KEDA"
+refused=$(kubectl apply -f k8s/keda.yaml 2>&1)
+check "KEDA is refused while our HPA exists" grep -q 'already managed by the hpa' <<<"${refused}"
+kubectl delete -f k8s/hpa.yaml >/dev/null
+kubectl apply -f k8s/keda.yaml >/dev/null
+zero_from=$SECONDS
+wait_until 120 workers_are 0
+check "The worker goes to zero ($((SECONDS - zero_from)) s)" workers_are 0
+check "KEDA made its own HPA" kubectl get hpa keda-hpa-worker -o name
+check "The page shows no workers" [ "$(shop | jq .workers)" -eq 0 ]
+
+measure 5 0 0
+check "5 cheeses take one worker (${peak})" [ "${peak}" -eq 1 ]
+check "They are ready in about 15 s, from no workers (${done_s:-?} s)" [ "${done_s:-99}" -le 25 ]
+
+measure 500 0 0
+awk -F'\t' 'BEGIN { print "time queue pods" } $1 >= due { print $1, $2, $3; due = $1 + 15 }' "${timeline}"
+check "The first worker arrived within 15 s (${more_s:-never} s)" [ "${more_s:-99}" -le 15 ]
+check "It reached 6 workers from zero (${peak})" [ "${peak}" -eq 6 ]
+check "All 500 finished, none lost (${done_s:-?} s)" finished
+check "It went back to zero workers (${settled_s:-never} s)" [ -n "${settled_s}" ]
+cp "${timeline}" .local/timeline-keda.tsv
+keda_row="${more_s:--} ${peak} ${done_s:--} ${settled_s:--}"
 
 step "The whole shop at the end"
 shop | jq -c '{queued: (.queued | length), aging: (.aging | length), ready: (.ready | length)}'
 check "Every ticket is ready" [ "$(shop | jq '.ready | length')" -eq "${ordered}" ]
 check "Nothing restarted" [ "$(restarts)" -eq 0 ]
 
-printf '\n500 tickets: first new worker %s s, peak %s workers, done %s s, back to 1 worker %s s\n' \
-    "${more_s:--}" "${peak}" "${done_s:--}" "${settled_s:--}"
+printf '\n500 cheeses   %s  %s  %s  %s\n' 'first new worker s' 'peak' 'all ready s' 'settled s'
+read -r a b c d <<<"${hpa_row}"
+printf '%-12s %19s %5s %12s %10s\n' 'HPA on CPU' "${a}" "${b}" "${c}" "${d} (1 worker)"
+read -r a b c d <<<"${keda_row}"
+printf '%-12s %19s %5s %12s %10s\n' 'KEDA' "${a}" "${b}" "${c}" "${d} (0 workers)"
 printf '%s passed, %s failed\n' "${passed}" "${failed}"
 ((failed == 0))

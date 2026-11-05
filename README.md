@@ -126,7 +126,7 @@ docker compose exec frontend-react npm run check
 
 ## Tutorial: Scaling with Kubernetes
 Our shop works, until many people order at once. We push it until it falls behind, then let Kubernetes
-run it and add workers by itself.
+run it and add workers by itself: first when the workers' CPU is busy, then when tickets are waiting.
 
 ### Set up, before class
 This downloads images, so do it on a good connection. It takes a few minutes the first time.
@@ -140,7 +140,7 @@ cd src/deployment
 ./docker-shell.sh
 ```
 
-2. Inside the container, create the cluster and start the shop on it:
+2. Inside the container, create the cluster and deploy the shop to it:
 ```bash
 ./scripts/create-cluster.sh
 ```
@@ -150,7 +150,7 @@ cd src/deployment
 ```
 
 That makes a cluster of three nodes, each a Docker container on your laptop, and adds metrics-server,
-which measures CPU. Then it builds the production images, copies them into the nodes and starts the
+which measures CPU, and KEDA, which we use at the end. Then it builds the docker images, copies them into the nodes and starts the
 shop. Every `kubectl` command below runs in this shell. For a second one, run `./docker-shell.sh` again
 from `src/deployment`.
 
@@ -173,7 +173,7 @@ docker compose down
 ```
 
 ### Run the shop on Kubernetes
-1. Open http://localhost:8080. It is the same shop, from the same code, now in production images.
+1. Open http://localhost:8080. It is the same shop, from the same code, now in docker images.
 
 2. See what runs:
 ```bash
@@ -230,9 +230,64 @@ Wait for a number under `TARGETS`, such as `cpu: 1%/60%`. Until then the HPA has
 | All 500 ready | About 12.5 minutes | About 2.5 minutes |
 | Afterwards | 1 worker | Back to 1 worker, about 4 minutes after the order |
 
-Nobody typed a command, and the extra workers went away when the work did. The HPA only sees CPU, so
-it is always a little late: a queue of 500 and a queue of 5 look the same to it once the workers are
-busy. Scaling on the length of the queue itself is the next step, with a tool such as KEDA.
+Nobody typed a command, and the extra workers went away when the work did. But the HPA only sees CPU,
+so it is always a little late: a queue of 500 and a queue of 5 look the same to it once the workers are
+busy. And it never goes below one worker, because with no pods there is no CPU to read.
+
+### Scale on the queue with KEDA
+The number we care about is how many tickets are waiting, and Redis knows it exactly. KEDA reads that
+number and gives it to an HPA.
+
+1. Leave the `watch` running, and switch the worker from our HPA to KEDA. A Deployment can only have one
+   HPA, so delete ours first:
+```bash
+kubectl delete -f k8s/hpa.yaml
+```
+
+```bash
+kubectl apply -f k8s/keda.yaml
+```
+
+Read `k8s/keda.yaml`. It asks for one worker for every 5 tickets waiting, up to 6, and no workers at
+all when nothing is waiting.
+
+2. Within about KEDA_ZERO, the worker pod goes away and the page says **0 workers aging**. Nothing is
+   running, and nothing is wasted. The watch shows a new HPA, `keda-hpa-worker`: KEDA does not
+   replace the HPA, it gives it a better signal.
+
+3. Order 500 again:
+```bash
+./scripts/order.sh 500
+```
+
+Under `TARGETS`, `296/5 (avg)` means about 296 tickets waiting for each worker, against a target of 5.
+A number such as `61334m` is the same, in thousandths: about 61.
+
+4. Compare the two, for the same 500 cheeses:
+
+| | HPA on CPU | KEDA on the queue |
+| --- | --- | --- |
+| Before the order | 1 worker | No workers |
+| First new worker | About CPU_FIRST s after the order | About KEDA_FIRST s |
+| All 500 ready | About CPU_DONE | About KEDA_DONE |
+| Afterwards | Back to 1 worker, about CPU_SETTLED after the order | Back to no workers, about KEDA_SETTLED after |
+
+The CPU told the HPA the workers were busy. The queue tells KEDA how much work is waiting, so it
+starts at once, even from no workers, and stops as soon as the work is done.
+
+To show the HPA on CPU again, take KEDA off and put one worker back by hand, because an HPA does not
+start a Deployment that has no pods:
+```bash
+kubectl delete -f k8s/keda.yaml
+```
+
+```bash
+kubectl scale deployment worker --replicas=1
+```
+
+```bash
+kubectl apply -f k8s/hpa.yaml
+```
 
 ### Clean up
 Delete the cluster, in the deployment shell:
@@ -244,7 +299,7 @@ Leave the container with `exit`.
 
 To rehearse this tutorial before class, run `./scripts/verify.sh` in the deployment shell. It **deletes
 the cluster**, builds a new one, runs every step above except the compose one, checks each result and
-prints the numbers. It takes about 10 minutes.
+prints the numbers. It takes about 15 minutes.
 
 ## Troubleshooting
 
@@ -257,6 +312,9 @@ prints the numbers. It takes about 10 minutes.
 | `port is already allocated` when creating the cluster | Something is using port 8080. Stop it, or run `docker ps` to find it |
 | `TARGETS` shows `<unknown>` | Wait up to a minute for the HPA's first reading |
 | The worker jumps to 5 pods as soon as you apply the HPA | Its first reading still includes your last order. Wait for it to go back to one pod |
+| `already managed by the hpa` when applying `k8s/keda.yaml` | Our HPA is still there. Run `kubectl delete -f k8s/hpa.yaml` first |
+| `no matches for kind "ScaledObject"` | KEDA is not installed: the cluster is older than this tutorial. Delete it, then run `create-cluster.sh` and `deploy.sh` again |
+| The worker stays at 0 pods after you apply the HPA again | Put one worker back first: `kubectl scale deployment worker --replicas=1` |
 
 ## Docker Cleanup
 
