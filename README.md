@@ -3,7 +3,7 @@
 In this tutorial we run a small full-stack app on our laptop, in four containers on one Docker network.
 You order cheeses, a worker ages them one at a time, and the page shows them moving across the board.
 
-![Application Architecture](images/llm-rag-flow-1.png)
+![Application Architecture](images/cheese-shop-demo.png)
 
 ## Prerequisites
 - Docker, with ports 5810 and 9810 free. Nothing else: no Python or Node on your laptop.
